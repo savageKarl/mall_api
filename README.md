@@ -140,7 +140,137 @@ app.listen(APP_PORT, () => {
 
 ```
 
+# 四，添加路由
+
+路由：根据不同的URL，调用对应处理器函数
+
+## 1 安装koa-router
+
+```
+npm install @koa/router -S
+```
+安装第三方声明文件
+```
+npm i --save-dev @types/koa__router
+```
+
+步骤：
+
+1. 导入包
+2. 实例化对象
+3. 编写路由
+4. 注册中间件
+
+## 2 编写路由
+
+创建`src/router`目录，编写`user.route.ts`文件，内容如下：
+
+```typescript
+import Router from '@koa/router';
+
+const router = new Router({ prefix: '/users' });
+
+// GET /user/
+router.get('/', (ctx, next) => {
+  ctx.body = 'hello user';
+});
+
+export default router;
+
+```
+
+## 3 改写main.ts
+
+```typescript
+import Koa from 'koa';
+
+import config from './config/config.default';
+import userRouter from './router/user.route';
+const { APP_PORT } = config;
+
+const app = new Koa();
+
+app.use(userRouter.routes())
+app.listen(APP_PORT, () => {
+  console.log(`server is running on http://localhost:${APP_PORT}`);
+});
+
+```
+
+# 五，目录结构的优化
+
+## 1 将http服务和app业务拆分
+
+创建`src/app/index.ts`
+
+```typescript
+import Koa from 'koa';
+
+import userRouter from '../router/user.route';
+
+const app = new Koa();
+
+app.use(userRouter.routes());
+
+export default app;
+
+```
+
+改写`src/main.ts`，内容如下：
+
+```typescript
+import config from './config/config.default';
+import app from './app/index';
+const { APP_PORT } = config;
 
 
+app.listen(APP_PORT, () => {
+  console.log(`server is running on http://localhost:${APP_PORT}`);
+});
 
+```
+
+## 2 将路由和控制器拆分
+
+路由：解析URL，分发给控制器对应的方法。
+
+控制器：处理不同的业务
+
+改写`user.route.ts`
+
+```typescript
+import Router from '@koa/router';
+import userController from '../controller/user.controller';
+
+const { register, login } = userController;
+
+const router = new Router({ prefix: '/users' });
+
+// 注册接口
+router.post('/register', register);
+
+// 登录接口
+router.post('/login', login);
+export default router;
+
+```
+
+创建`controller/user.controller.ts`
+
+```typescript
+import {Context, Next} from 'koa';
+
+class UserController {
+  async register(ctx: Context, next: Next) {
+    ctx.body = '用户注册成功';
+  }
+
+  async login(ctx: Context, next: Next) {
+    ctx.body = '登录成功';
+  }
+}
+
+export default new UserController;
+
+```
 
