@@ -274,3 +274,143 @@ export default new UserController;
 
 ```
 
+# 六，解析body
+
+## 1 安装koa-body
+
+```
+npm install koa-body -S  
+```
+
+## 2 注册中间件
+
+改写`app/index.ts`
+
+```typescript
+import Koa from 'koa';
+import koaBody from 'koa-body';
+import userRouter from '../router/user.route';
+
+const app = new Koa();
+
+app.use(koaBody());
+app.use(userRouter.routes());
+
+export default app;
+
+```
+
+![image-20220110204902955](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20220110204902955.png)
+
+## 3 解析请求数据
+
+改写`user.controller.ts`
+
+```typescript
+import {Context, Next} from 'koa';
+
+import userService from '../service/user.service';
+
+const { createUser } = userService;
+class UserController {
+  async register(ctx: Context, next: Next) {
+    // 1. 获取数据
+    // console.log(ctx.request.body);
+    const {user_name, password} = ctx.request.body;
+    // 2. 操作数据库
+    const res = await createUser(user_name, password);
+    console.log(res);
+    // 3. 返回结果
+    ctx.body = ctx.request.body;
+  }
+
+  async login(ctx: Context, next: Next) {
+    ctx.body = '登录成功';
+  }
+}
+
+export default new UserController;
+
+```
+
+## 4 拆分service层
+
+serbice层主要用于做数据库处理
+
+创建`src/service/user.service.ts`
+
+```typescript
+import {Context, Next} from 'koa';
+
+import userService from '../service/user.service';
+
+const { createUser } = userService;
+class UserController {
+  async register(ctx: Context, next: Next) {
+    // 1. 获取数据
+    // console.log(ctx.request.body);
+    const {user_name, password} = ctx.request.body;
+    // 2. 操作数据库
+    const res = await createUser(user_name, password);
+    console.log(res);
+    // 3. 返回结果
+    ctx.body = ctx.request.body;
+  }
+
+  async login(ctx: Context, next: Next) {
+    ctx.body = '登录成功';
+  }
+}
+
+export default new UserController;
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
