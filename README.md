@@ -340,6 +340,149 @@ serbice层主要用于做数据库处理
 创建`src/service/user.service.ts`
 
 ```typescript
+class UserService {
+  async createUser(user_name, password) {
+    // todo: 写入数据库
+    return '写入数据库成功'
+  }
+}
+
+export default new UserService();
+
+```
+
+# 7，数据库操作
+
+sequelize ORM数据库工具
+
+ORM：对象关系映射
+
+- 数据表映射（对应）一个类
+- 数据表中的数据行（记录）对应一个对象
+- 数据表的字段对应对象的属性
+- 数据表的操作对应对象的方法
+
+## 1 安装sequelize
+
+```
+npm install --save sequelize mysql2
+```
+
+## 2 连接数据库
+
+`src/db/seq.ts`
+
+```typescript
+import { Sequelize } from "sequelize";
+
+import config from '../config/config.default';
+
+const { 
+  MYSQL_HOST,
+  MYSQL_PORT,
+  MYSQL_USER,
+  MYSQL_PWD,
+  MYSQL_DB } = config;
+
+const seq = new Sequelize(MYSQL_DB as string, MYSQL_USER as string, MYSQL_PWD, {
+  host: MYSQL_HOST,
+  dialect: 'mysql',
+});
+
+seq.authenticate().then(() => {
+  console.log('数据库连接成功');
+}).catch((e) => {
+  console.log('数据库连接成功');
+});
+
+export default seq;
+
+```
+
+## 3 编写配置文件
+
+```
+APP_PORT = 8000
+
+MYSQL_HOST = localhost
+MYSQL_PORT = 3306
+MYSQL_USER = root
+MYSQL_PWD = root
+MYSQL_DB = zdsc
+```
+
+# 八，创建User模型
+
+## 1 拆分Model 层
+
+sequelize主要通过`Model` 对应数据表
+
+创建`src/model/user.model.ts`
+
+```typescript
+import { DataTypes } from "sequelize";
+
+import seq from "../db/seq";
+
+// 创建模型(Model zh_user -> zh_users)
+const User = seq.define('zh_user', {
+  // id 会被sequelize自动创建，管理
+  user_name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+    comment: '用户名，唯一'
+  },
+  password: {
+    type: DataTypes.CHAR(64),
+    allowNull: false,
+    comment: '密码'
+  },
+  is_admin: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: 0,
+    comment: '是否为管理员，0：不是管理员（默认）；1：是管理员'
+  }
+});
+
+// 强制同步数据库（创建数据表）
+// User.sync({ force: true })
+User.sync({force: true});
+
+export default User;
+
+```
+
+# 九，添加用户入库
+
+所有数据库的操作都在 Service 层完成，Service 调用 Model 完成数据库操作
+
+改写`src/service/user.service.ts`
+
+```typescript
+import User from "../model/user.model";
+
+class UserService {
+  async createUser(user_name: string, password: string) {
+    // 插入数据
+    try {
+      const res = await User.create({ user_name, password });
+      return (res as any).dataValues;
+    } catch (e) {
+      console.log(e)
+    }
+    return '写入数据库成功';
+  }
+}
+
+export default new UserService;
+
+```
+
+同时，改写`user.controller.ts`
+
+```typescript
 import {Context, Next} from 'koa';
 
 import userService from '../service/user.service';
@@ -354,7 +497,14 @@ class UserController {
     const res = await createUser(user_name, password);
     console.log(res);
     // 3. 返回结果
-    ctx.body = ctx.request.body;
+    ctx.body = {
+      code: 0,
+      message: '用户注册成功',
+      result: {
+        id: res.id,
+        user_name: res.user_name,
+      },
+    };
   }
 
   async login(ctx: Context, next: Next) {
@@ -365,6 +515,231 @@ class UserController {
 export default new UserController;
 
 ```
+
+# 十，错误处理
+
+在控制器中，对不同的错误进行处理，返回不同的错误提示，提高代码质量
+
+```typescript
+import {Context, Next} from 'koa';
+
+import userService from '../service/user.service';
+
+const { createUser, getUserInfo } = userService;
+class UserController {
+  async register(ctx: Context, next: Next) {
+    // 1. 获取数据
+    // console.log(ctx.request.body);
+    const {user_name, password} = ctx.request.body;
+
+    // 合法性
+    if (!user_name || !password) {
+      console.error('用户名或密码为空', ctx.request.body);
+      ctx.status = 400;
+      ctx.body = {
+        code: '10001',
+        message: '用户名或密码为空',
+        result: '',
+      };
+      return;
+    }
+    // 合理性
+    if (await getUserInfo({ user_name })) {
+      ctx.status = 409;
+      ctx.body = {
+        code: '1002',
+        message: '用户名已存在',
+        result: '',
+      };
+      return;
+    }
+
+    // 2. 操作数据库
+    const res = await createUser(user_name, password);
+    console.log(res);
+    // 3. 返回结果
+    ctx.body = {
+      code: 0,
+      message: '用户注册成功',
+      result: {
+        id: res.id,
+        user_name: res.user_name,
+      },
+    };
+  }
+
+  async login(ctx: Context, next: Next) {
+    ctx.body = '登录成功';
+  }
+}
+
+export default new UserController;
+
+```
+
+在service 中封装函数
+
+```typescript
+import User from "../model/user.model";
+interface GetUserInfoParam {
+  id?: number;
+  user_name?: string;
+  password?: string;
+  is_admin?: number;
+}
+class UserService {
+  async createUser(user_name: string, password: string) {
+    // 插入数据
+    try {
+      const res = await User.create({ user_name, password });
+      return (res as any).dataValues;
+    } catch (e) {
+      console.log(e)
+    }
+    return '写入数据库成功';
+  }
+
+
+  async getUserInfo({id, user_name, password, is_admin} : GetUserInfoParam) {
+    const whereOpt = {};
+
+    id && Object.assign(whereOpt, { id });
+    user_name && Object.assign(whereOpt, { user_name });
+    password && Object.assign(whereOpt, { password });
+    is_admin && Object.assign(whereOpt, { is_admin });
+
+    const res = await User.findOne({
+      attributes: ['id', 'user_name', 'password', 'is_admin'],
+      where: whereOpt,
+    });
+    return res ? (res as any).dataValues : {};
+  }
+}
+
+export default new UserService;
+
+```
+
+# 十一，拆分中间件
+
+## 1 拆分中间件
+
+添加`src/middleware/user.middleware.ts`
+
+```typescript
+import { Context, Next } from 'koa';
+import userService from '../service/user.service';
+import errType from '../constant/err.type';
+
+const { userFormateError, userAlreadyExited } = errType;
+const { getUserInfo } = userService;
+
+export const userValidator = async (ctx: Context, next: Next) => {
+  // 合法性
+  const { user_name, password } = ctx.request.body;
+
+  if (!user_name || !password) {
+    console.error('用户名或密码为空', ctx.request.body);
+    ctx.app.emit('error', userFormateError, ctx);
+    return;
+  }
+
+  await next();
+};
+
+export const verifyUser = async (ctx: Context, next: Next) => {
+    // 合理性
+    const { user_name } = ctx.request.body;
+
+    if (await getUserInfo({ user_name })) {
+      ctx.app.emit('error', userAlreadyExited, ctx);
+      return;
+    };
+
+    await next();
+};
+
+
+```
+
+## 2 统一错误处理
+
+- 在出错的地方使用`ctx.app.emit`提交错误
+
+- 在 app 中通过`app.on`监听
+
+编写统一的错误定义文件`src/constant/err.type.ts`
+
+```typescript
+export default {
+  userFormateError: {
+    code: '10001',
+    message: '用户名或密码为空',
+    result: '',
+  },
+  userAlreadyExited: {
+    code: '10002',
+    message: '用户已经存在',
+    result: '',
+  }
+};
+```
+
+# 3 错误处理函数
+
+单独抽离错误处理函数：`src/app/errorHandlers`
+
+```typescript
+import { Context } from 'koa';
+
+export default function(err: any, ctx: Context){
+  let status = 500;
+  switch (err.code) {
+    case '10001':
+      status = 400;
+      break;
+    case '10002':
+      status = 409;
+      break;
+    default:
+      status = 500;
+  };
+  ctx.status = status;
+  ctx.body = err;
+}
+```
+
+改写`app/index.ts`
+
+```typescript
+import Koa from 'koa';
+import koaBody from 'koa-body';
+import userRouter from '../router/user.route';
+
+import errorHandler from './errorHandler';
+
+const app = new Koa();
+
+app.use(koaBody());
+app.use(userRouter.routes());
+
+// 统一的错误处理
+app.on('error', errorHandler);
+export default app;
+
+```
+
+# 十二，加密
+
+
+
+
+
+
+
+
+
+
 
 
 
