@@ -11,17 +11,24 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.2",
     "@types/koa": "^2.13.4",
     "@types/koa__router": "^8.0.11",
+    "@types/koa-static": "^4.0.2",
     "nodemon": "^2.0.15",
     "ts-node": "^10.4.0",
     "typescript": "^4.5.4"
   },
   "dependencies": {
     "@koa/router": "^10.1.1",
+    "@types/jsonwebtoken": "^8.5.7",
+    "bcryptjs": "^2.4.3",
     "dotenv": "^10.0.0",
+    "jsonwebtoken": "^8.5.1",
     "koa": "^2.13.4",
     "koa-body": "^4.2.0",
+    "koa-parameter": "^3.0.1",
+    "koa-static": "^5.0.0",
     "mysql2": "^2.3.3",
     "sequelize": "^6.12.5"
   }

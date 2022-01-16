@@ -1,14 +1,21 @@
 import {Context, Next} from 'koa';
 
+import jwt from 'jsonwebtoken';
+
 import userService from '../service/user.service';
 import errType from '../constant/err.type';
 
-const { createUser, getUserInfo } = userService;
+
+import configDefault from '../config/config.default';
+
+const { JWT_SECRET } = configDefault;
+
+const { createUser, getUserInfo, updateById } = userService;
 const { userResigterEror } = errType;
 class UserController {
+  /** 注册 */
   async register(ctx: Context, next: Next) {
     // 1. 获取数据
-    // console.log(ctx.request.body);
     const {user_name, password} = ctx.request.body;
 
     try {
@@ -31,8 +38,51 @@ class UserController {
 
   }
 
+  /** 登录 */
   async login(ctx: Context, next: Next) {
-    ctx.body = '登录成功';
+    const { user_name, password } = ctx.request.body;
+    
+
+    // 1. 获取用户信息（在token的payload中，记录id， user_name， is_admin）
+    try {
+      const res = await getUserInfo({ user_name });
+      const { password, ...userRes } = res;
+      ctx.body = {
+        code: 0,
+        message: '用户登陆成功',
+        result: {
+          token: jwt.sign(userRes, JWT_SECRET as string, { expiresIn: '1d' }),
+        },
+      };
+      
+    } catch (e: any) {
+      console.error(e);
+    }
+  }
+
+  /** 修改密码 */
+  async changePassword(ctx: Context, next: Next) {
+    // 1，获取数据
+    const id = ctx.state.user.id;
+    const password = ctx.request.body.password;
+
+    console.log(id, password)
+    // 2，操作数据库
+    if (await updateById({ id, password })) {
+      ctx.body = {
+        code: 0,
+        message: '修改密码成功',
+        result: '',
+      };
+    } else {
+      ctx.body = {
+        code: '10007',
+        message: '修改密码失败',
+        result: '',
+      }
+    }
+    // 3，返回结果
+    
   }
 }
 

@@ -731,9 +731,351 @@ export default app;
 
 # 十二，加密
 
+在将密码保存到数据库之前，要对密码进行加密处理
+
+#  1 安装bcryptjs
+
+```
+npm install bcryptjs -S  
+```
+
+ 由于没有自带声明文件，需要安装第三方的声明文件
+
+```
+npm i --save-dev @types/bcryptjs
+```
+
+## 2 编写加密中间件
+
+编写加密中间件，改写`src/middleware/user.middleware.ts`
+
+```typescript
+import { Context, Next } from 'koa';
+import bcrypt from 'bcryptjs';
+
+import userService from '../service/user.service';
+import errType from '../constant/err.type';
+
+const { userFormateError, userAlreadyExited, userResigterEror } = errType;
+const { getUserInfo } = userService;
+
+// 验证账号或密码是否为空
+export const userValidator = async (ctx: Context, next: Next) => {
+  // 合法性
+  const { user_name, password } = ctx.request.body;
+
+  if (!user_name || !password) {
+    console.error('用户名或密码为空', ctx.request.body);
+    ctx.app.emit('error', userFormateError, ctx);
+    return;
+  }
+  await next();
+};
+
+// 验证用户是否存在
+export const verifyUser = async (ctx: Context, next: Next) => {
+    // 合理性
+    const { user_name } = ctx.request.body;
+    try {
+      const res = await getUserInfo({ user_name });
+      if (res) {
+        console.error('用户名已经存在');
+        ctx.app.emit('error', userAlreadyExited, ctx);
+        return;
+      }
+    } catch (e) {
+      console.error('用户注册错误');
+      ctx.app.emit('error', userResigterEror, ctx);
+      return;
+    }
+    await next();
+};
+
+// 加密密码
+export const encryptPassword = async (ctx: Context, next: Next) => {
+  const { password } = ctx.request.body;
+
+  const salt = bcrypt.genSaltSync(10);
+  // hash 保存的是密文
+  const hash = bcrypt.hashSync(password, salt);
+  
+  ctx.request.body.password = hash;
+
+  await next();
+};
+```
 
 
 
+## 3 在 router中使用
+
+改写`user.route.ts`
+
+```typescript
+import Router from '@koa/router';
+import userController from '../controller/user.controller';
+import { userValidator, verifyUser, encryptPassword } from '../middleware/user.middleware';
+const { register, login } = userController;
+
+const router = new Router({ prefix: '/users' });
+
+// 注册接口
+router.post('/register', userValidator, verifyUser,encryptPassword , register);
+
+// 登录接口
+router.post('/login', login);
+export default router;
+
+```
+
+# 十三，登陆验证
+
+流程：
+
+- 验证账号或者密码是否为空
+- 验证用户是否存在
+- 验证密码是否匹配
+
+改写`src/middlerware/user.middleware.ts`
+
+```typescript
+import { Context, Next } from 'koa';
+import bcrypt from 'bcryptjs';
+
+import userService from '../service/user.service';
+import errType from '../constant/err.type';
+
+const { 
+  userFormateError,
+  userAlreadyExited,
+  userResigterEror,
+  userDoesNotExist,
+  userLoginError,
+  userPasswordInvaild,
+} = errType;
+const { getUserInfo } = userService;
+
+/** 验证账号或密码是否为空 */
+export const userValidator = async (ctx: Context, next: Next) => {
+  // 合法性
+  const { user_name, password } = ctx.request.body;
+
+  if (!user_name || !password) {
+    console.error('用户名或密码为空', ctx.request.body);
+    ctx.app.emit('error', userFormateError, ctx);
+    return;
+  }
+  await next();
+};
+
+/** 验证用户是否存在 */
+export const verifyUser = async (ctx: Context, next: Next) => {
+    // 合理性
+    const { user_name } = ctx.request.body;
+    try {
+      const res = await getUserInfo({ user_name });
+      if (res) {
+        console.error('用户名已经存在');
+        ctx.app.emit('error', userAlreadyExited, ctx);
+        return;
+      }
+    } catch (e) {
+      console.error('用户注册错误');
+      ctx.app.emit('error', userResigterEror, ctx);
+      return;
+    }
+    await next();
+};
+
+/** 加密密码 */
+export const encryptPassword = async (ctx: Context, next: Next) => {
+  const { password } = ctx.request.body;
+
+  const salt = bcrypt.genSaltSync(10);
+  // hash 保存的是密文
+  const hash = bcrypt.hashSync(password, salt);
+  
+  ctx.request.body.password = hash;
+
+  await next();
+};
+
+/** 验证登录账号和密码 */
+export const verifyLogin = async(ctx: Context, next: Next) => {
+  // 1. 判断用户是否存在（不存在就报错）
+  const { user_name, password } = ctx.request.body;
+  try {
+    const res = await getUserInfo({ user_name });
+
+    if (!res) {
+      console.error('用户名不存在', { user_name });
+      ctx.app.emit('error', userDoesNotExist, ctx);
+      return;
+    }
+
+    // 2. 判断密码是否匹配（不匹配就报错）
+    if (!bcrypt.compareSync(password, res.password)) {
+      ctx.app.emit('error', userPasswordInvaild, ctx);
+      return;
+    }
+  } catch (e) {
+    console.error(e);
+    ctx.app.emit('error', userLoginError, ctx);
+  }
+  
+
+  await next();
+};
+```
+
+定义错误类`src/constant/`err.type.ts
+
+```typescript
+export default {
+  userFormateError: {
+    code: '10001',
+    message: '用户名或密码为空',
+    result: '',
+  },
+  userAlreadyExited: {
+    code: '10002',
+    message: '用户已经存在',
+    result: '',
+  },
+  userResigterEror: {
+    code: '10003',
+    message: '用户注册错误',
+    result: '',
+  },
+  userDoesNotExist: {
+    code: '10004',
+    message: '用户不存在',
+    result: '',
+  },
+  userLoginError: {
+    code: '10005',
+    message: '用户登陆失败',
+    result: '',
+  },
+  userPasswordInvaild: {
+    code: '10006',
+    message: '用户密码不匹配',
+    result: '',
+  },
+};
+```
+
+改写路由`src/router/`user.route.ts
+
+```typescript
+import Router from '@koa/router';
+import userController from '../controller/user.controller';
+import {
+  userValidator,
+  verifyUser,
+  encryptPassword,
+  verifyLogin,
+} from '../middleware/user.middleware';
+const { register, login } = userController;
+
+const router = new Router({ prefix: '/users' });
+
+// 注册接口
+router.post('/register', userValidator, verifyUser, encryptPassword, register);
+
+// 登录接口
+router.post('/login', userValidator, verifyLogin, login);
+
+export default router;
+
+```
+
+# 十四，用户的认证
+
+登陆成功后，给用户颁发一个令牌 token，用户在以后的每一个请求中携带这个令牌。
+
+jws：jsonwebtoken
+
+- header: 头部
+- payload：载荷
+- signature：签名
+
+## 1 颁发 token
+
+### 1) 安装jsonwebtoken	
+
+```
+npm install jsonwebtoken -S
+npm i @types/jsonwebtoken
+```
+
+### 2) 在user.controller.ts控制器中改写login方法
+
+```typescript
+import {Context, Next} from 'koa';
+
+import jwt from 'jsonwebtoken';
+
+import userService from '../service/user.service';
+import errType from '../constant/err.type';
+
+
+import configDefault from '../config/config.default';
+
+const { JWT_SECRET } = configDefault;
+
+const { createUser, getUserInfo } = userService;
+const { userResigterEror } = errType;
+class UserController {
+  async register(ctx: Context, next: Next) {
+    // 1. 获取数据
+    const {user_name, password} = ctx.request.body;
+
+    try {
+      // 2. 操作数据库
+      const res = await createUser(user_name, password);
+      console.log(res);
+      // 3. 返回结果
+      ctx.body = {
+        code: 0,
+        message: '用户注册成功',
+        result: {
+          id: res.id,
+          user_name: res.user_name,
+        },
+      };
+    } catch (e) {
+      console.log(e);
+      ctx.app.emit('eror', userResigterEror, ctx);
+    }
+
+  }
+
+  async login(ctx: Context, next: Next) {
+    const { user_name, password } = ctx.request.body;
+    
+
+    // 1. 获取用户信息（在token的payload中，记录id， user_name， is_admin）
+    try {
+      const res = await getUserInfo({ user_name });
+      const { password, ...userRes } = res;
+      ctx.body = {
+        code: 0,
+        message: '用户登陆成功',
+        result: {
+          token: jwt.sign(userRes, JWT_SECRET as string, { expiresIn: '1d' }),
+        }
+      };
+      
+    } catch (e: any) {
+      console.error(e);
+    }
+  }
+}
+
+export default new UserController;
+
+```
 
 
 
