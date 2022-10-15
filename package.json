@@ -4,12 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon -e ts --exec npx ts-node ./src/main.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon -e ts --exec npx ts-node ./src/main.ts"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "GNU GPLv3",
   "devDependencies": {
     "@types/bcryptjs": "^2.4.2",
     "@types/koa": "^2.13.4",

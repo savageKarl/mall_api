@@ -6,8 +6,6 @@ import Koastatic from 'koa-static';
 
 import parameter from 'koa-parameter';
 
-// import userRouter from '../router/user.route';
-// import goodsRouter from '../router/goods.route';
 import errorHandler from './errorHandler';
 
 import router from '../router';
@@ -28,8 +26,6 @@ app.use(koaBody({
 app.use(Koastatic(path.join(__dirname, '../upload')));
 app.use(parameter(app));
 
-// app.use(userRouter.routes());
-// app.use(goodsRouter.routes());
 app.use(router.routes()).use(router.allowedMethods());
 
 // 统一的错误处理
